@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Microsoft Teams JS SDK - required for Teams tab embedding -->
+<script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2333;
+    --border: #2a3045;
+    --accent: #4fffb0;
+    --accent2: #ff6b4a;
+    --accent3: #4ac8ff;
+    --accent4: #ffd166;
+    --text: #e8ecf4;
+    --text-dim: #6b7594;
+    --text-mid: #9aa3bf;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .week-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .week-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-mid);
+    min-width: 160px;
+    text-align: center;
+  }
+
+  .nav-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .nav-btn:hover { background: var(--border); color: var(--text); }
+
+  .today-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .today-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .view-toggle {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .view-btn {
+    padding: 5px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    transition: all 0.15s;
+  }
+  .view-btn.active {
+    background: var(--surface2);
+    color: var(--accent);
+  }
+
+  .add-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    transition: all 0.15s;
+  }
+  .add-btn:hover { background: #3de89e; transform: translateY(-1px); }
+
+  /* SITE LEGEND */
+  .legend {
+    display: flex;
+    gap: 16px;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-mid);
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .legend-item:hover { border-color: var(--border); }
+  .legend-item.filtered { opacity: 0.35; }
+  .legend-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+
+  /* MAIN GRID */
+  .calendar-wrap {
+    padding: 16px 24px;
+    overflow-x: auto;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 160px repeat(7, 1fr);
+    min-width: 760px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  /* Day headers */
+  .day-header {
+    background: var(--surface);
+    padding: 10px 12px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .day-header:last-child { border-right: none; }
+
+  .day-header .day-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .day-header .day-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-mid);
+    line-height: 1.2;
+  }
+  .day-header.today .day-num { color: var(--accent); }
+  .day-header.today { background: rgba(79,255,176,0.04); }
+
+  .corner-cell {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 10px 12px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+  }
+  .corner-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* Person rows */
+  .person-label {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .person-label:last-of-type { border-bottom: none; }
+
+  .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    flex-shrink: 0;
+    color: var(--bg);
+  }
+  .person-name {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.2;
+    font-weight: 500;
+  }
+  .person-role {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* Calendar cells */
+  .cal-cell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    min-height: 64px;
+    padding: 5px;
+    position: relative;
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  .cal-cell:last-child { border-right: none; }
+  .cal-cell:hover { background: rgba(255,255,255,0.02); }
+  .cal-cell.weekend { background: rgba(0,0,0,0.15); }
+  .cal-cell.today-col { background: rgba(79,255,176,0.02); }
+
+  .event-pill {
+    border-radius: 5px;
+    padding: 3px 7px;
+    font-size: 10px;
+    line-height: 1.4;
+    margin-bottom: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .event-pill:hover { filter: brightness(1.15); transform: translateX(1px); }
+
+  .event-pill .pill-title {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .event-pill .pill-sub {
+    opacity: 0.7;
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 420px;
+    max-width: 95vw;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  .form-row {
+    margin-bottom: 14px;
+  }
+  .form-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 5px;
+  }
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-select option { background: var(--surface); }
+
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .type-option {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+  .type-option:hover { border-color: var(--text-dim); }
+  .type-option.selected { color: var(--bg); font-weight: 600; }
+  .type-option .type-icon { font-size: 18px; display: block; margin-bottom: 3px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+    justify-content: flex-end;
+  }
+  .btn-cancel {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    padding: 8px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+  .btn-save {
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .btn-save:hover { background: #3de89e; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    z-index: 300;
+    pointer-events: none;
+    display: none;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .tooltip.visible { display: block; }
+  .tt-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .tt-row { color: var(--text-mid); font-size: 11px; margin-bottom: 2px; }
+  .tt-row span { color: var(--text); }
+
+  /* Summary bar */
+  .summary-bar {
+    display: flex;
+    gap: 20px;
+    padding: 10px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+  .summary-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .summary-num {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    color: var(--text);
+  }
+  .summary-desc {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    line-height: 1.3;
+  }
+  .summary-divider {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+    margin: 2px 0;
+  }
+
+  /* Delete btn inside tooltip */
+  .event-delete {
+    position: absolute; top: 2px; right: 2px;
+    background: none; border: none; color: transparent;
+    width: 16px; height: 16px; cursor: pointer;
+    font-size: 10px; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.1s;
+  }
+  .event-pill:hover .event-delete { color: rgba(255,255,255,0.5); }
+  .event-delete:hover { background: rgba(255,80,80,0.3) !important; color: #ff5050 !important; }
+
+  .empty-cell-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--text-dim);
+  }
+  .cal-cell:hover .empty-cell-hint { opacity: 0.3; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">field<span>track</span></div>
+    <div class="week-nav">
+      <button class="nav-btn" onclick="shiftWeek(-1)">‹</button>
+      <div class="week-label" id="weekLabel">—</div>
+      <button class="nav-btn" onclick="shiftWeek(1)">›</button>
+      <button class="today-btn" onclick="goToToday()">Today</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="add-btn" onclick="openModal()">+ Add Entry</button>
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="legend" id="legend"></div>
+
+<!-- CALENDAR -->
+<div class="calendar-wrap">
+  <div class="calendar-grid" id="calGrid"></div>
+</div>
+
+<!-- SUMMARY -->
+<div class="summary-bar" id="summaryBar"></div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Add Entry</div>
+
+    <div class="form-row">
+      <label class="form-label">Person</label>
+      <select class="form-select" id="fPerson"></select>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Activity Type</label>
+      <div class="type-grid" id="typeGrid"></div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Location / Site</label>
+      <select class="form-select" id="fSite"></select>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Notes (optional)</label>
+      <input class="form-input" id="fNotes" placeholder="e.g. Annual review, Flight BA204...">
+    </div>
+
+    <div class="form-row form-row-2">
+      <div>
+        <label class="form-label">From</label>
+        <input class="form-input" type="date" id="fFrom">
+      </div>
+      <div>
+        <label class="form-label">To</label>
+        <input class="form-input" type="date" id="fTo">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// Initialize Microsoft Teams SDK (required for Teams tab embedding)
+microsoftTeams.app.initialize().then(() => {
+  microsoftTeams.app.getContext().then((context) => {
+    // You can use context.user, context.team, etc. here later for Graph API
+    console.log("Running inside Teams:", context);
+  });
+}).catch(() => {
+  console.log("Running outside Teams (browser preview mode)");
+});
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+
+const PEOPLE = [
+  { id: 1, name: "Anna K.",    role: "Account Mgr",  color: "#4fffb0" },
+  { id: 2, name: "James T.",   role: "Sales Lead",   color: "#4ac8ff" },
+  { id: 3, name: "Maria S.",   role: "Field Eng.",   color: "#ffd166" },
+  { id: 4, name: "Oliver B.",  role: "Consultant",   color: "#ff6b4a" },
+  { id: 5, name: "Priya N.",   role: "BDM",          color: "#c084fc" },
+];
+
+const SITES = [
+  { id: "hq",       label: "HQ – Copenhagen",   color: "#4fffb0" },
+  { id: "london",   label: "London Office",      color: "#4ac8ff" },
+  { id: "berlin",   label: "Berlin Site",        color: "#ffd166" },
+  { id: "client_a", label: "Client A – Aarhus",  color: "#ff6b4a" },
+  { id: "client_b", label: "Client B – Hamburg", color: "#c084fc" },
+  { id: "remote",   label: "Remote / Home",      color: "#6b7594" },
+  { id: "travel",   label: "Travel",             color: "#fb923c" },
+];
+
+const TYPES = [
+  { id: "visit",    label: "Customer Visit", icon: "🤝" },
+  { id: "travel",   label: "Travel",         icon: "✈️"  },
+  { id: "office",   label: "Office Day",     icon: "🏢" },
+  { id: "remote",   label: "Remote",         icon: "🏠" },
+  { id: "training", label: "Training",       icon: "📚" },
+  { id: "other",    label: "Other",          icon: "📌" },
+];
+
+// Seed data
+let entries = [
+  { id: 1, personId: 1, type: "visit",    site: "client_a", notes: "Q1 review",         from: "2026-03-02", to: "2026-03-03" },
+  { id: 2, personId: 2, type: "travel",   site: "travel",   notes: "Flight to Berlin",   from: "2026-03-04", to: "2026-03-04" },
+  { id: 3, personId: 2, type: "visit",    site: "berlin",   notes: "Kickoff meeting",    from: "2026-03-05", to: "2026-03-07" },
+  { id: 4, personId: 3, type: "office",   site: "hq",       notes: "",                   from: "2026-03-02", to: "2026-03-05" },
+  { id: 5, personId: 4, type: "visit",    site: "client_b", notes: "Contract signing",   from: "2026-03-03", to: "2026-03-04" },
+  { id: 6, personId: 5, type: "remote",   site: "remote",   notes: "",                   from: "2026-03-02", to: "2026-03-06" },
+  { id: 7, personId: 1, type: "office",   site: "hq",       notes: "",                   from: "2026-03-09", to: "2026-03-10" },
+  { id: 8, personId: 3, type: "visit",    site: "client_a", notes: "On-site install",    from: "2026-03-09", to: "2026-03-11" },
+  { id: 9, personId: 4, type: "training", site: "london",   notes: "Product training",   from: "2026-03-10", to: "2026-03-12" },
+  { id:10, personId: 2, type: "office",   site: "hq",       notes: "",                   from: "2026-03-09", to: "2026-03-09" },
+];
+let nextId = 11;
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+
+let currentMonday = getMonday(new Date());
+let filteredSites = new Set();
+let selectedType = "visit";
+let editingCell = null; // {personId, date}
+
+function getMonday(d) {
+  const dt = new Date(d);
+  const day = dt.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  dt.setDate(dt.getDate() + diff);
+  dt.setHours(0,0,0,0);
+  return dt;
+}
+
+function addDays(d, n) {
+  const dt = new Date(d);
+  dt.setDate(dt.getDate() + n);
+  return dt;
+}
+
+function fmt(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function parseDate(s) {
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
+function overlaps(entry, date) {
+  const d = parseDate(date);
+  const from = parseDate(entry.from);
+  const to = parseDate(entry.to);
+  return d >= from && d <= to;
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+
+function render() {
+  renderLegend();
+  renderGrid();
+  renderSummary();
+}
+
+function renderLegend() {
+  const el = document.getElementById('legend');
+  el.innerHTML = SITES.map(s => `
+    <div class="legend-item ${filteredSites.has(s.id) ? 'filtered' : ''}" onclick="toggleFilter('${s.id}')">
+      <div class="legend-dot" style="background:${s.color}"></div>
+      ${s.label}
+    </div>
+  `).join('');
+}
+
+function renderGrid() {
+  const grid = document.getElementById('calGrid');
+  const today = fmt(new Date());
+
+  // Build 7 days
+  const days = Array.from({length:7}, (_,i) => addDays(currentMonday, i));
+
+  // Update week label
+  const opts = {month:'short', day:'numeric'};
+  document.getElementById('weekLabel').textContent =
+    `${days[0].toLocaleDateString('en-GB', opts)} – ${days[6].toLocaleDateString('en-GB', {month:'short', day:'numeric', year:'numeric'})}`;
+
+  let html = '';
+
+  // Corner
+  html += `<div class="corner-cell"><span class="corner-label">Team</span></div>`;
+
+  // Day headers
+  days.forEach(d => {
+    const ds = fmt(d);
+    const isToday = ds === today;
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    html += `<div class="day-header ${isToday?'today':''} ${isWeekend?'weekend':''}">
+      <div class="day-name">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div>
+      <div class="day-num">${d.getDate()}</div>
+    </div>`;
+  });
+
+  // Person rows
+  PEOPLE.forEach((person, pi) => {
+    const isLast = pi === PEOPLE.length - 1;
+    html += `<div class="person-label" style="${isLast ? 'border-bottom:none' : ''}">
+      <div class="avatar" style="background:${person.color}">${person.name.slice(0,2).toUpperCase()}</div>
+      <div>
+        <div class="person-name">${person.name}</div>
+        <div class="person-role">${person.role}</div>
+      </div>
+    </div>`;
+
+    days.forEach((d, di) => {
+      const ds = fmt(d);
+      const isToday = ds === today;
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+      const isLast2 = di === 6;
+
+      // Get entries for this person+day
+      const dayEntries = entries.filter(e =>
+        e.personId === person.id &&
+        overlaps(e, ds) &&
+        !filteredSites.has(e.site)
+      );
+
+      const pills = dayEntries.map(e => {
+        const site = SITES.find(s => s.id === e.site);
+        const type = TYPES.find(t => t.id === e.type);
+        const bg = site ? site.color : '#444';
+        return `<div class="event-pill" 
+          style="background:${bg}22; border-left: 3px solid ${bg}; color:${bg}"
+          onmouseenter="showTooltip(event,${e.id})"
+          onmouseleave="hideTooltip()"
+          onclick="event.stopPropagation()">
+          <button class="event-delete" onclick="deleteEntry(${e.id}, event)" title="Remove">✕</button>
+          <span class="pill-title">${type ? type.icon : ''} ${site ? site.label.split('–')[0].trim() : e.site}</span>
+          ${e.notes ? `<span class="pill-sub">${e.notes}</span>` : ''}
+        </div>`;
+      }).join('');
+
+      html += `<div class="cal-cell ${isToday?'today-col':''} ${isWeekend?'weekend':''} ${isLast2?'':''}${isLast?'last-row':''}"
+        onclick="openModalForCell(${person.id}, '${ds}')"
+        style="${isLast2 ? 'border-right:none':''} ${isLast ? 'border-bottom:none':''}">
+        ${pills}
+        ${dayEntries.length === 0 ? '<div class="empty-cell-hint">+</div>' : ''}
+      </div>`;
+    });
+  });
+
+  grid.innerHTML = html;
+}
+
+function renderSummary() {
+  const days = Array.from({length:7}, (_,i) => fmt(addDays(currentMonday, i)));
+
+  const weekEntries = entries.filter(e => days.some(d => overlaps(e, d)));
+  const visitCount = weekEntries.filter(e => e.type === 'visit').length;
+  const travelCount = weekEntries.filter(e => e.type === 'travel').length;
+  const sitesUsed = new Set(weekEntries.map(e => e.site)).size;
+  const peopleActive = new Set(weekEntries.map(e => e.personId)).size;
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-item">
+      <div class="summary-num" style="color:var(--accent)">${visitCount}</div>
+      <div class="summary-desc">Customer<br>visits</div>
+    </div>
+    <div class="summary-divider"></div>
+    <div class="summary-item">
+      <div class="summary-num" style="color:var(--accent3)">${travelCount}</div>
+      <div class="summary-desc">Travel<br>days</div>
+    </div>
+    <div class="summary-divider"></div>
+    <div class="summary-item">
+      <div class="summary-num" style="color:var(--accent4)">${sitesUsed}</div>
+      <div class="summary-desc">Active<br>sites</div>
+    </div>
+    <div class="summary-divider"></div>
+    <div class="summary-item">
+      <div class="summary-num">${peopleActive}</div>
+      <div class="summary-desc">Team<br>members active</div>
+    </div>
+  `;
+}
+
+// ─── INTERACTIONS ─────────────────────────────────────────────────────────────
+
+function shiftWeek(n) {
+  currentMonday = addDays(currentMonday, n * 7);
+  render();
+}
+
+function goToToday() {
+  currentMonday = getMonday(new Date());
+  render();
+}
+
+function toggleFilter(siteId) {
+  if (filteredSites.has(siteId)) filteredSites.delete(siteId);
+  else filteredSites.add(siteId);
+  render();
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+
+function openModal(personId, date) {
+  const overlay = document.getElementById('modalOverlay');
+
+  // Populate person select
+  const fp = document.getElementById('fPerson');
+  fp.innerHTML = PEOPLE.map(p => `<option value="${p.id}">${p.name} – ${p.role}</option>`).join('');
+  if (personId) fp.value = personId;
+
+  // Populate type grid
+  document.getElementById('typeGrid').innerHTML = TYPES.map(t => `
+    <div class="type-option ${t.id === selectedType ? 'selected' : ''}" 
+      onclick="selectType('${t.id}')"
+      id="type_${t.id}"
+      style="${t.id === selectedType ? `background:${getSiteColor('hq')}; border-color:${getSiteColor('hq')}` : ''}">
+      <span class="type-icon">${t.icon}</span>${t.label}
+    </div>
+  `).join('');
+
+  // Populate site select
+  const fs = document.getElementById('fSite');
+  fs.innerHTML = SITES.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+
+  // Set dates
+  const fromDate = date || fmt(currentMonday);
+  document.getElementById('fFrom').value = fromDate;
+  document.getElementById('fTo').value = fromDate;
+  document.getElementById('fNotes').value = '';
+  document.getElementById('modalTitle').textContent = 'Add Entry';
+
+  overlay.classList.add('open');
+}
+
+function openModalForCell(personId, date) {
+  openModal(personId, date);
+}
+
+function getSiteColor(siteId) {
+  const s = SITES.find(x => x.id === siteId);
+  return s ? s.color : '#4fffb0';
+}
+
+function selectType(id) {
+  selectedType = id;
+  // Update UI
+  TYPES.forEach(t => {
+    const el = document.getElementById('type_' + t.id);
+    if (!el) return;
+    if (t.id === id) {
+      el.classList.add('selected');
+      el.style.background = '#4fffb0';
+      el.style.borderColor = '#4fffb0';
+      el.style.color = '#0f1117';
+    } else {
+      el.classList.remove('selected');
+      el.style.background = '';
+      el.style.borderColor = '';
+      el.style.color = '';
+    }
+  });
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+function saveEntry() {
+  const personId = parseInt(document.getElementById('fPerson').value);
+  const site     = document.getElementById('fSite').value;
+  const notes    = document.getElementById('fNotes').value.trim();
+  const from     = document.getElementById('fFrom').value;
+  const to       = document.getElementById('fTo').value;
+
+  if (!from || !to) { alert('Please set dates.'); return; }
+  if (from > to) { alert('End date must be after start date.'); return; }
+
+  entries.push({ id: nextId++, personId, type: selectedType, site, notes, from, to });
+  closeModal();
+  render();
+}
+
+function deleteEntry(id, e) {
+  e.stopPropagation();
+  entries = entries.filter(x => x.id !== id);
+  hideTooltip();
+  render();
+}
+
+// ─── TOOLTIP ─────────────────────────────────────────────────────────────────
+
+function showTooltip(event, entryId) {
+  const entry = entries.find(e => e.id === entryId);
+  if (!entry) return;
+  const person = PEOPLE.find(p => p.id === entry.personId);
+  const site   = SITES.find(s => s.id === entry.site);
+  const type   = TYPES.find(t => t.id === entry.type);
+
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = `
+    <div class="tt-title" style="color:${site ? site.color : '#fff'}">${type ? type.icon + ' ' + type.label : ''}</div>
+    <div class="tt-row">Person: <span>${person ? person.name : '?'}</span></div>
+    <div class="tt-row">Site: <span>${site ? site.label : entry.site}</span></div>
+    <div class="tt-row">Dates: <span>${entry.from} → ${entry.to}</span></div>
+    ${entry.notes ? `<div class="tt-row">Notes: <span>${entry.notes}</span></div>` : ''}
+  `;
+
+  tt.style.left = (event.clientX + 14) + 'px';
+  tt.style.top  = (event.clientY - 10) + 'px';
+  tt.classList.add('visible');
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').classList.remove('visible');
+}
+
+// Init
+render();
+</script>
+</body>
+</html>
