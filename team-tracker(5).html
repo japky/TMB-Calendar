@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FieldTracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #181c27; --surface2: #1e2333; --border: #2a3045;
+    --accent: #4fffb0; --accent2: #ff6b4a; --accent3: #4ac8ff; --accent4: #ffd166;
+    --text: #e8ecf4; --text-dim: #6b7594; --text-mid: #9aa3bf; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; overflow-x: hidden; }
+
+  /* LOGIN */
+  .login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 24px; }
+  .login-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 36px; color: var(--accent); }
+  .login-logo span { color: var(--text-dim); font-weight: 400; }
+  .login-sub { color: var(--text-dim); font-size: 13px; text-align: center; max-width: 300px; line-height: 1.6; }
+  .login-btn { background: var(--accent); color: var(--bg); border: none; padding: 12px 28px; border-radius: 8px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 10px; transition: all 0.15s; }
+  .login-btn:hover { background: #3de89e; transform: translateY(-1px); }
+  .login-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .login-error { color: var(--accent2); font-size: 12px; text-align: center; max-width: 360px; line-height: 1.6; }
+
+  /* LOADING */
+  .loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--text-dim); font-size: 13px; }
+
+  /* SETUP */
+  .setup-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 20px; padding: 40px; }
+  .setup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; max-width: 500px; width: 100%; }
+  .setup-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; margin-bottom: 16px; color: var(--accent); }
+  .setup-step { font-size: 12px; color: var(--text-mid); margin-bottom: 10px; line-height: 1.7; }
+  .setup-step strong { color: var(--text); }
+  .setup-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; margin-top: 6px; margin-bottom: 16px; transition: border-color 0.15s; }
+  .setup-input:focus { border-color: var(--accent); }
+  .setup-btn { background: var(--accent); color: var(--bg); border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; width: 100%; transition: all 0.15s; }
+  .setup-btn:hover { background: #3de89e; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: var(--accent); }
+  .logo span { color: var(--text-dim); font-weight: 400; }
+  .week-nav { display: flex; align-items: center; gap: 8px; }
+  .week-label { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--text-mid); min-width: 160px; text-align: center; }
+  .nav-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-mid); width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .nav-btn:hover { background: var(--border); color: var(--text); }
+  .today-btn { background: none; border: 1px solid var(--border); color: var(--text-mid); padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 11px; transition: all 0.15s; }
+  .today-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .user-chip { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px 4px 4px; }
+  .user-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 10px; color: var(--bg); }
+  .user-name { font-size: 11px; color: var(--text-mid); }
+  .signout-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px; font-family: 'DM Mono', monospace; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+  .signout-btn:hover { color: var(--accent2); }
+  .add-btn { background: var(--accent); color: var(--bg); border: none; padding: 7px 14px; border-radius: 7px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px; transition: all 0.15s; }
+  .add-btn:hover { background: #3de89e; transform: translateY(-1px); }
+  .sync-indicator { font-size: 10px; color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .sync-dot.syncing { animation: pulse 1s infinite; background: var(--accent4); }
+  .sync-dot.error { background: var(--accent2); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  /* LEGEND */
+  .legend { display: flex; gap: 16px; padding: 10px 24px; border-bottom: 1px solid var(--border); background: var(--bg); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-mid); cursor: pointer; padding: 3px 8px; border-radius: 4px; border: 1px solid transparent; transition: all 0.15s; }
+  .legend-item:hover { border-color: var(--border); }
+  .legend-item.filtered { opacity: 0.35; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* CALENDAR */
+  .calendar-wrap { padding: 16px 24px; overflow-x: auto; }
+  .calendar-grid { display: grid; grid-template-columns: 160px repeat(7, 1fr); min-width: 760px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .day-header { background: var(--surface); padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .day-header:last-child { border-right: none; }
+  .day-header .day-name { font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .day-header .day-num { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--text-mid); line-height: 1.2; }
+  .day-header.today .day-num { color: var(--accent); }
+  .day-header.today { background: rgba(79,255,176,0.04); }
+  .corner-cell { background: var(--surface); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 10px 12px; display: flex; align-items: flex-end; }
+  .corner-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+  .person-label { background: var(--surface); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 12px; flex-shrink: 0; color: var(--bg); }
+  .person-name { font-size: 12px; color: var(--text); line-height: 1.2; font-weight: 500; }
+  .person-role { font-size: 10px; color: var(--text-dim); }
+  .cal-cell { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); min-height: 64px; padding: 5px; position: relative; transition: background 0.1s; cursor: pointer; }
+  .cal-cell:hover { background: rgba(255,255,255,0.02); }
+  .cal-cell.weekend { background: rgba(0,0,0,0.15); }
+  .cal-cell.today-col { background: rgba(79,255,176,0.02); }
+  .event-pill { border-radius: 5px; padding: 3px 7px; font-size: 10px; line-height: 1.4; margin-bottom: 3px; cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden; }
+  .event-pill:hover { filter: brightness(1.15); transform: translateX(1px); }
+  .event-pill .pill-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .event-pill .pill-sub { opacity: 0.7; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .event-delete { position: absolute; top: 2px; right: 2px; background: none; border: none; color: transparent; width: 16px; height: 16px; cursor: pointer; font-size: 10px; border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+  .event-pill:hover .event-delete { color: rgba(255,255,255,0.5); }
+  .event-delete:hover { background: rgba(255,80,80,0.3) !important; color: #ff5050 !important; }
+  .empty-cell-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; opacity: 0; transition: opacity 0.15s; color: var(--text-dim); }
+  .cal-cell:hover .empty-cell-hint { opacity: 0.3; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 420px; max-width: 95vw; animation: modalIn 0.2s ease; }
+  @keyframes modalIn { from{opacity:0;transform:translateY(12px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)} }
+  .modal-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; margin-bottom: 20px; }
+  .form-row { margin-bottom: 14px; }
+  .form-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px; }
+  .form-input, .form-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px; outline: none; transition: border-color 0.15s; }
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-select option { background: var(--surface); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .type-option { border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center; cursor: pointer; transition: all 0.15s; font-size: 11px; color: var(--text-mid); }
+  .type-option:hover { border-color: var(--text-dim); }
+  .type-option.selected { color: var(--bg); font-weight: 600; }
+  .type-option .type-icon { font-size: 18px; display: block; margin-bottom: 3px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end; }
+  .btn-cancel { background: none; border: 1px solid var(--border); color: var(--text-mid); padding: 8px 18px; border-radius: 8px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 13px; transition: all 0.15s; }
+  .btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+  .btn-save { background: var(--accent); border: none; color: var(--bg); padding: 8px 20px; border-radius: 8px; cursor: pointer; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; transition: all 0.15s; }
+  .btn-save:hover { background: #3de89e; }
+  .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* TOOLTIP */
+  .tooltip { position: fixed; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 12px; z-index: 300; pointer-events: none; display: none; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .tooltip.visible { display: block; }
+  .tt-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .tt-row { color: var(--text-mid); font-size: 11px; margin-bottom: 2px; }
+  .tt-row span { color: var(--text); }
+
+  /* SUMMARY */
+  .summary-bar { display: flex; gap: 20px; padding: 10px 24px; border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .summary-item { display: flex; align-items: center; gap: 8px; }
+  .summary-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; }
+  .summary-desc { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; line-height: 1.3; }
+  .summary-divider { width: 1px; background: var(--border); align-self: stretch; margin: 2px 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-logo">field<span>track</span></div>
+  <div class="login-sub">Team location &amp; visit calendar.<br>Sign in with your Microsoft 365 account.</div>
+  <button class="login-btn" onclick="signIn()">
+    <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+    </svg>
+    Sign in with Microsoft
+  </button>
+  <div id="loginError" class="login-error hidden"></div>
+</div>
+
+<!-- LOADING -->
+<div id="loadingScreen" class="loading-screen hidden">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Signing in...</div>
+</div>
+
+<!-- SETUP -->
+<div id="setupScreen" class="setup-screen hidden">
+  <div class="setup-card">
+    <div class="setup-title">One-time setup</div>
+    <div class="setup-step">This runs once to create the data file on your SharePoint. After this, everyone just signs in and it works.</div>
+    <div class="setup-step"><strong>Enter your SharePoint site URL:</strong></div>
+    <input class="setup-input" id="setupSiteUrl" placeholder="https://zjtmb01.sharepoint.com/sites/Vestas" />
+    <div class="setup-step">We'll create a <strong>FieldTracker.xlsx</strong> file in the Documents library of that site. All team entries will be stored there.</div>
+    <button class="setup-btn" onclick="runSetup()">Create database &amp; continue →</button>
+    <div id="setupError" class="login-error hidden" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="hidden">
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">field<span>track</span></div>
+      <div class="week-nav">
+        <button class="nav-btn" onclick="shiftWeek(-1)">‹</button>
+        <div class="week-label" id="weekLabel">—</div>
+        <button class="nav-btn" onclick="shiftWeek(1)">›</button>
+        <button class="today-btn" onclick="goToToday()">Today</button>
+      </div>
+      <div class="sync-indicator">
+        <div class="sync-dot" id="syncDot"></div>
+        <span id="syncText">synced</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-chip">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <div class="user-name" id="userName">—</div>
+        <button class="signout-btn" onclick="signOut()">sign out</button>
+      </div>
+      <button class="add-btn" onclick="openModal()">+ Add Entry</button>
+    </div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="calendar-wrap"><div class="calendar-grid" id="calGrid"></div></div>
+  <div class="summary-bar" id="summaryBar"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-title">Add Entry</div>
+    <div class="form-row">
+      <label class="form-label">Person</label>
+      <select class="form-select" id="fPerson"></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Activity Type</label>
+      <div class="type-grid" id="typeGrid"></div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Location / Site</label>
+      <select class="form-select" id="fSite"></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Notes (optional)</label>
+      <input class="form-input" id="fNotes" placeholder="e.g. Annual review, Flight BA204...">
+    </div>
+    <div class="form-row form-row-2">
+      <div><label class="form-label">From</label><input class="form-input" type="date" id="fFrom"></div>
+      <div><label class="form-label">To</label><input class="form-input" type="date" id="fTo"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" id="btnSave" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIGURATION — paste your IDs here
+// ═══════════════════════════════════════
+const CONFIG = {
+  clientId: '99a9aa0f-af36-417c-8a4c-22ab6d8a0f5c',
+  tenantId: 'd21da1ea-9475-4a04-af78-be027e95ad21',
+};
+
+// ── Your team ───────────────────────────
+const PEOPLE = [
+  { id:1, name:"Anna K.",   role:"Account Mgr", color:"#4fffb0" },
+  { id:2, name:"James T.",  role:"Sales Lead",  color:"#4ac8ff" },
+  { id:3, name:"Maria S.",  role:"Field Eng.",  color:"#ffd166" },
+  { id:4, name:"Oliver B.", role:"Consultant",  color:"#ff6b4a" },
+  { id:5, name:"Priya N.",  role:"BDM",         color:"#c084fc" },
+];
+
+// ── Your sites ──────────────────────────
+const SITES = [
+  { id:"hq",       label:"HQ – Copenhagen",  color:"#4fffb0" },
+  { id:"london",   label:"London Office",    color:"#4ac8ff" },
+  { id:"berlin",   label:"Berlin Site",      color:"#ffd166" },
+  { id:"client_a", label:"Client A",         color:"#ff6b4a" },
+  { id:"client_b", label:"Client B",         color:"#c084fc" },
+  { id:"remote",   label:"Remote / Home",    color:"#6b7594" },
+  { id:"travel",   label:"Travel",           color:"#fb923c" },
+];
+
+const TYPES = [
+  { id:"visit",    label:"Customer Visit", icon:"🤝" },
+  { id:"travel",   label:"Travel",         icon:"✈️"  },
+  { id:"office",   label:"Office Day",     icon:"🏢" },
+  { id:"remote",   label:"Remote",         icon:"🏠" },
+  { id:"training", label:"Training",       icon:"📚" },
+  { id:"other",    label:"Other",          icon:"📌" },
+];
+
+// ═══════════════════════════════════════
+// MSAL
+// ═══════════════════════════════════════
+const msalInstance = new msal.PublicClientApplication({
+  auth: {
+    clientId: CONFIG.clientId,
+    authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+    redirectUri: window.location.origin + window.location.pathname,
+  },
+  cache: { cacheLocation: 'sessionStorage' }
+});
+
+const SCOPES = ['Files.ReadWrite','User.Read'];
+let currentAccount = null;
+
+async function getToken() {
+  const req = { scopes: SCOPES, account: currentAccount };
+  try { return (await msalInstance.acquireTokenSilent(req)).accessToken; }
+  catch { return (await msalInstance.acquireTokenPopup(req)).accessToken; }
+}
+
+async function signIn() {
+  showErr('loginError',''); showScreen('loading'); setLoading('Signing in...');
+  try {
+    await msalInstance.initialize();
+    const r = await msalInstance.loginPopup({ scopes: SCOPES });
+    currentAccount = r.account;
+    setUser(r.account.name);
+    await initApp();
+  } catch(e) { showScreen('login'); showErr('loginError','Sign in failed: '+(e.message||e)); }
+}
+
+function signOut() { msalInstance.logoutPopup(); showScreen('login'); }
+function setUser(name) {
+  document.getElementById('userAvatar').textContent = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('userName').textContent = name.split(' ')[0];
+}
+
+// ═══════════════════════════════════════
+// GRAPH API
+// ═══════════════════════════════════════
+async function gFetch(method, url, body) {
+  const token = await getToken();
+  const opts = { method, headers: { Authorization:'Bearer '+token, 'Content-Type':'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch('https://graph.microsoft.com/v1.0'+url, opts);
+  if (!r.ok && r.status !== 204) throw new Error(await r.text());
+  if (r.status === 204) return null;
+  return r.json();
+}
+const gGet    = url      => gFetch('GET',    url);
+const gPost   = (url,b)  => gFetch('POST',   url, b);
+const gPatch  = (url,b)  => gFetch('PATCH',  url, b);
+const gDelete = url      => gFetch('DELETE', url);
+
+// ═══════════════════════════════════════
+// EXCEL BACKEND
+// ═══════════════════════════════════════
+const EXCEL_FILE = 'FieldTracker.xlsx';
+const TABLE = 'EntriesTable';
+let driveId = null, fileId = null;
+
+async function initExcel(spSiteUrl) {
+  setLoading('Connecting to OneDrive...');
+  const drive = await gGet('/me/drive');
+  driveId = drive.id;
+
+  setLoading('Looking for FieldTracker.xlsx...');
+  try {
+    const existing = await gGet(`/me/drive/root:/${EXCEL_FILE}`);
+    driveId = existing.parentReference.driveId;
+    fileId = existing.id;
+    setLoading('Found existing file ✓');
+  } catch {
+    setLoading('Creating FieldTracker.xlsx in your OneDrive...');
+    const token = await getToken();
+    const r = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${EXCEL_FILE}:/content`, {
+      method:'PUT',
+      headers:{ Authorization:'Bearer '+token, 'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      body: new Blob([], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})
+    });
+    if (!r.ok) throw new Error('Cannot create Excel file: '+await r.text());
+    const created = await r.json();
+    driveId = created.parentReference.driveId;
+    fileId = created.id;
+    setLoading('Waiting for file to be ready...');
+    await new Promise(res=>setTimeout(res,5000));
+    setLoading('Setting up spreadsheet...');
+    await gPatch(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/range(address='A1:G1')`,
+      { values:[['id','personId','type','site','notes','from','to']] });
+    await gPost(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/tables/add`,
+      { address:'Sheet1!A1:G1', hasHeaders:true });
+  }
+  localStorage.setItem('ft_config', JSON.stringify({ siteUrl:spSiteUrl, driveId, fileId }));
+}
+
+async function loadEntries() {
+  setSyncState('syncing','syncing...');
+  try {
+    const data = await gGet(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/tables/${TABLE}/rows`);
+    entries = (data.value||[]).map(row => {
+      const [id,personId,type,site,notes,from,to] = row.values[0];
+      return { id:Number(id), personId:Number(personId), type, site, notes:notes||'', from, to };
+    });
+    nextId = entries.length > 0 ? Math.max(...entries.map(e=>e.id))+1 : 1;
+    setSyncState('synced','synced');
+  } catch(e) { setSyncState('error','sync error'); throw e; }
+}
+
+async function saveEntryToExcel(entry) {
+  setSyncState('syncing','saving...');
+  try {
+    await gPost(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/tables/${TABLE}/rows/add`,
+      { values:[[entry.id,entry.personId,entry.type,entry.site,entry.notes,entry.from,entry.to]] });
+    setSyncState('synced','synced');
+  } catch(e) { setSyncState('error','save failed'); throw e; }
+}
+
+async function deleteEntryFromExcel(entryId) {
+  setSyncState('syncing','deleting...');
+  try {
+    const data = await gGet(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/tables/${TABLE}/rows`);
+    const idx = (data.value||[]).findIndex(r=>Number(r.values[0][0])===entryId);
+    if (idx === -1) return;
+    await gDelete(`/drives/${driveId}/items/${fileId}/workbook/worksheets/Sheet1/tables/${TABLE}/rows/itemAt(index=${idx})`);
+    setSyncState('synced','synced');
+  } catch(e) { setSyncState('error','delete failed'); }
+}
+
+// ═══════════════════════════════════════
+// APP INIT
+// ═══════════════════════════════════════
+async function initApp() {
+  const saved = localStorage.getItem('ft_config');
+  if (saved) {
+    try {
+      const cfg = JSON.parse(saved);
+      driveId = cfg.driveId; fileId = cfg.fileId;
+      setLoading('Loading your data...');
+      await loadEntries();
+      showScreen('main'); render(); return;
+    } catch { localStorage.removeItem('ft_config'); }
+  }
+  showScreen('setup');
+}
+
+async function runSetup() {
+  const url = document.getElementById('setupSiteUrl').value.trim();
+  if (!url) { showErr('setupError','Please enter your SharePoint site URL.'); return; }
+  showErr('setupError',''); showScreen('loading');
+  try {
+    await initExcel(url);
+    await loadEntries();
+    showScreen('main'); render();
+  } catch(e) { showScreen('setup'); showErr('setupError','Setup failed: '+(e.message||e)); }
+}
+
+// ═══════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════
+function showScreen(name) {
+  ['loginScreen','loadingScreen','setupScreen','mainApp'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  const map = {login:'loginScreen',loading:'loadingScreen',setup:'setupScreen',main:'mainApp'};
+  document.getElementById(map[name]).classList.remove('hidden');
+}
+function setLoading(t) { document.getElementById('loadingText').textContent = t; }
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  msg ? el.classList.remove('hidden') : el.classList.add('hidden');
+}
+function setSyncState(state, text) {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot' + (state==='syncing'?' syncing':state==='error'?' error':'');
+  document.getElementById('syncText').textContent = text;
+}
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let entries = [], nextId = 1;
+let currentMonday = getMonday(new Date());
+let filteredSites = new Set(), selectedType = 'visit';
+
+function getMonday(d) {
+  const dt=new Date(d), day=dt.getDay();
+  dt.setDate(dt.getDate()+(day===0?-6:1-day)); dt.setHours(0,0,0,0); return dt;
+}
+function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt; }
+function fmt(d) { return d.toISOString().slice(0,10); }
+function parseDate(s) { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function overlaps(e,date) { const d=parseDate(date),f=parseDate(e.from),t=parseDate(e.to); return d>=f&&d<=t; }
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render() { renderLegend(); renderGrid(); renderSummary(); }
+
+function renderLegend() {
+  document.getElementById('legend').innerHTML = SITES.map(s=>`
+    <div class="legend-item ${filteredSites.has(s.id)?'filtered':''}" onclick="toggleFilter('${s.id}')">
+      <div class="legend-dot" style="background:${s.color}"></div>${s.label}</div>`).join('');
+}
+
+function renderGrid() {
+  const today=fmt(new Date()), days=Array.from({length:7},(_,i)=>addDays(currentMonday,i));
+  document.getElementById('weekLabel').textContent =
+    `${days[0].toLocaleDateString('en-GB',{month:'short',day:'numeric'})} – ${days[6].toLocaleDateString('en-GB',{month:'short',day:'numeric',year:'numeric'})}`;
+  let h=`<div class="corner-cell"><span class="corner-label">Team</span></div>`;
+  days.forEach(d=>{
+    const ds=fmt(d),isT=ds===today,isW=d.getDay()===0||d.getDay()===6;
+    h+=`<div class="day-header ${isT?'today':''} ${isW?'weekend':''}">
+      <div class="day-name">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div>
+      <div class="day-num">${d.getDate()}</div></div>`;
+  });
+  PEOPLE.forEach((p,pi)=>{
+    const isLast=pi===PEOPLE.length-1;
+    h+=`<div class="person-label" style="${isLast?'border-bottom:none':''}">
+      <div class="avatar" style="background:${p.color}">${p.name.slice(0,2).toUpperCase()}</div>
+      <div><div class="person-name">${p.name}</div><div class="person-role">${p.role}</div></div></div>`;
+    days.forEach((d,di)=>{
+      const ds=fmt(d),isT=ds===today,isW=d.getDay()===0||d.getDay()===6,isL2=di===6;
+      const de=entries.filter(e=>e.personId===p.id&&overlaps(e,ds)&&!filteredSites.has(e.site));
+      const pills=de.map(e=>{
+        const s=SITES.find(s=>s.id===e.site),t=TYPES.find(t=>t.id===e.type),bg=s?s.color:'#444';
+        return `<div class="event-pill" style="background:${bg}22;border-left:3px solid ${bg};color:${bg}"
+          onmouseenter="showTooltip(event,${e.id})" onmouseleave="hideTooltip()" onclick="event.stopPropagation()">
+          <button class="event-delete" onclick="deleteEntry(${e.id},event)">✕</button>
+          <span class="pill-title">${t?t.icon:''} ${s?s.label.split('–')[0].trim():e.site}</span>
+          ${e.notes?`<span class="pill-sub">${e.notes}</span>`:''}</div>`;
+      }).join('');
+      h+=`<div class="cal-cell ${isT?'today-col':''} ${isW?'weekend':''}"
+        onclick="openModalForCell(${p.id},'${ds}')"
+        style="${isL2?'border-right:none':''} ${isLast?'border-bottom:none':''}">
+        ${pills}${de.length===0?'<div class="empty-cell-hint">+</div>':''}</div>`;
+    });
+  });
+  document.getElementById('calGrid').innerHTML=h;
+}
+
+function renderSummary() {
+  const days=Array.from({length:7},(_,i)=>fmt(addDays(currentMonday,i)));
+  const we=entries.filter(e=>days.some(d=>overlaps(e,d)));
+  document.getElementById('summaryBar').innerHTML=`
+    <div class="summary-item"><div class="summary-num" style="color:var(--accent)">${we.filter(e=>e.type==='visit').length}</div><div class="summary-desc">Customer<br>visits</div></div>
+    <div class="summary-divider"></div>
+    <div class="summary-item"><div class="summary-num" style="color:var(--accent3)">${we.filter(e=>e.type==='travel').length}</div><div class="summary-desc">Travel<br>days</div></div>
+    <div class="summary-divider"></div>
+    <div class="summary-item"><div class="summary-num" style="color:var(--accent4)">${new Set(we.map(e=>e.site)).size}</div><div class="summary-desc">Active<br>sites</div></div>
+    <div class="summary-divider"></div>
+    <div class="summary-item"><div class="summary-num">${new Set(we.map(e=>e.personId)).size}</div><div class="summary-desc">Team<br>members</div></div>`;
+}
+
+// ═══════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════
+function shiftWeek(n) { currentMonday=addDays(currentMonday,n*7); render(); }
+function goToToday() { currentMonday=getMonday(new Date()); render(); }
+function toggleFilter(s) { filteredSites.has(s)?filteredSites.delete(s):filteredSites.add(s); render(); }
+
+function openModal(personId,date) {
+  document.getElementById('fPerson').innerHTML=PEOPLE.map(p=>`<option value="${p.id}">${p.name} – ${p.role}</option>`).join('');
+  if (personId) document.getElementById('fPerson').value=personId;
+  document.getElementById('typeGrid').innerHTML=TYPES.map(t=>`
+    <div class="type-option ${t.id===selectedType?'selected':''}" onclick="selectType('${t.id}')" id="type_${t.id}"
+      style="${t.id===selectedType?'background:#4fffb0;border-color:#4fffb0;color:#0f1117':''}">
+      <span class="type-icon">${t.icon}</span>${t.label}</div>`).join('');
+  document.getElementById('fSite').innerHTML=SITES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+  const fd=date||fmt(currentMonday);
+  document.getElementById('fFrom').value=fd;
+  document.getElementById('fTo').value=fd;
+  document.getElementById('fNotes').value='';
+  document.getElementById('btnSave').disabled=false;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function openModalForCell(p,d) { openModal(p,d); }
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function handleOverlayClick(e) { if(e.target===document.getElementById('modalOverlay'))closeModal(); }
+
+function selectType(id) {
+  selectedType=id;
+  TYPES.forEach(t=>{
+    const el=document.getElementById('type_'+t.id); if(!el)return;
+    if(t.id===id){el.classList.add('selected');el.style.background='#4fffb0';el.style.borderColor='#4fffb0';el.style.color='#0f1117';}
+    else{el.classList.remove('selected');el.style.background='';el.style.borderColor='';el.style.color='';}
+  });
+}
+
+async function saveEntry() {
+  const personId=parseInt(document.getElementById('fPerson').value);
+  const site=document.getElementById('fSite').value;
+  const notes=document.getElementById('fNotes').value.trim();
+  const from=document.getElementById('fFrom').value;
+  const to=document.getElementById('fTo').value;
+  if(!from||!to){alert('Please set dates.');return;}
+  if(from>to){alert('End date must be after start date.');return;}
+  const entry={id:nextId++,personId,type:selectedType,site,notes,from,to};
+  entries.push(entry); closeModal(); render();
+  document.getElementById('btnSave').disabled=true;
+  try { await saveEntryToExcel(entry); }
+  catch(e) { alert('Saved locally but sync failed. Refresh to retry.'); }
+  document.getElementById('btnSave').disabled=false;
+}
+
+async function deleteEntry(id,e) {
+  e.stopPropagation();
+  entries=entries.filter(x=>x.id!==id); hideTooltip(); render();
+  try { await deleteEntryFromExcel(id); } catch(e) { console.error(e); }
+}
+
+function showTooltip(event,entryId) {
+  const e=entries.find(e=>e.id===entryId); if(!e)return;
+  const p=PEOPLE.find(p=>p.id===e.personId),s=SITES.find(s=>s.id===e.site),t=TYPES.find(t=>t.id===e.type);
+  const tt=document.getElementById('tooltip');
+  tt.innerHTML=`<div class="tt-title" style="color:${s?s.color:'#fff'}">${t?t.icon+' '+t.label:''}</div>
+    <div class="tt-row">Person: <span>${p?p.name:'?'}</span></div>
+    <div class="tt-row">Site: <span>${s?s.label:e.site}</span></div>
+    <div class="tt-row">Dates: <span>${e.from} → ${e.to}</span></div>
+    ${e.notes?`<div class="tt-row">Notes: <span>${e.notes}</span></div>`:''}`;
+  tt.style.left=(event.clientX+14)+'px'; tt.style.top=(event.clientY-10)+'px';
+  tt.classList.add('visible');
+}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+// ═══════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════
+(async()=>{
+  if(CONFIG.clientId==='PASTE_YOUR_CLIENT_ID_HERE'){
+    showScreen('login');
+    showErr('loginError','⚠️ App needs Azure App Registration. See the setup guide.');
+    return;
+  }
+  await msalInstance.initialize();
+  try { await msalInstance.handleRedirectPromise(); } catch(e){}
+  const accounts=msalInstance.getAllAccounts();
+  if(accounts.length>0){
+    currentAccount=accounts[0]; setUser(currentAccount.name);
+    showScreen('loading'); await initApp();
+  } else { showScreen('login'); }
+})();
+</script>
+</body>
+</html>
