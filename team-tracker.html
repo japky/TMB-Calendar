@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FieldTracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1117;--surface:#181c27;--surface2:#1e2333;--border:#2a3045;
+    --accent:#4fffb0;--accent2:#ff6b4a;--accent3:#4ac8ff;--accent4:#ffd166;
+    --text:#e8ecf4;--text-dim:#6b7594;--text-mid:#9aa3bf;--radius:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;}
+  .hidden{display:none!important;}
+
+  /* SCREENS */
+  .screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:20px;padding:24px;}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:36px;color:var(--accent);}
+  .logo span{color:var(--text-dim);font-weight:400;}
+  .sub{color:var(--text-dim);font-size:13px;text-align:center;max-width:300px;line-height:1.6;}
+  .ms-btn{background:var(--accent);color:var(--bg);border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;transition:all 0.15s;}
+  .ms-btn:hover{background:#3de89e;transform:translateY(-1px);}
+  .ms-btn svg{width:20px;height:20px;flex-shrink:0;}
+  .err{color:var(--accent2);font-size:12px;text-align:center;max-width:360px;line-height:1.6;}
+  .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-txt{color:var(--text-dim);font-size:13px;}
+
+  /* HEADER */
+  .header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;}
+  .header-left{display:flex;align-items:center;gap:16px;}
+  .h-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--accent);}
+  .h-logo span{color:var(--text-dim);font-weight:400;}
+  .week-nav{display:flex;align-items:center;gap:8px;}
+  .week-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--text-mid);min-width:160px;text-align:center;}
+  .nav-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-mid);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+  .nav-btn:hover{background:var(--border);color:var(--text);}
+  .today-btn{background:none;border:1px solid var(--border);color:var(--text-mid);padding:4px 12px;border-radius:6px;cursor:pointer;font-family:'DM Mono',monospace;font-size:11px;transition:all 0.15s;}
+  .today-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .header-right{display:flex;align-items:center;gap:10px;}
+  .user-chip{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px 4px 4px;}
+  .avatar{width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:10px;color:var(--bg);}
+  .user-name{font-size:11px;color:var(--text-mid);}
+  .signout-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;font-family:'DM Mono',monospace;padding:2px 6px;}
+  .signout-btn:hover{color:var(--accent2);}
+  .add-btn{background:var(--accent);color:var(--bg);border:none;padding:7px 14px;border-radius:7px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;transition:all 0.15s;}
+  .add-btn:hover{background:#3de89e;}
+  .sync-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:4px;}
+  .sync-dot.syncing{animation:pulse 1s infinite;background:var(--accent4);}
+  .sync-dot.error{background:var(--accent2);}
+  .sync-txt{font-size:10px;color:var(--text-dim);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+  /* LEGEND */
+  .legend{display:flex;gap:16px;padding:10px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-mid);cursor:pointer;padding:3px 8px;border-radius:4px;border:1px solid transparent;transition:all 0.15s;}
+  .legend-item:hover{border-color:var(--border);}
+  .legend-item.filtered{opacity:0.35;}
+  .legend-dot{width:8px;height:8px;border-radius:50%;}
+
+  /* CALENDAR */
+  .cal-wrap{padding:16px 24px;overflow-x:auto;}
+  .cal-grid{display:grid;grid-template-columns:140px repeat(7,1fr);min-width:720px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .day-hdr{background:var(--surface);padding:10px 12px;text-align:center;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+  .day-hdr:last-child{border-right:none;}
+  .day-name{font-family:'Syne',sans-serif;font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;}
+  .day-num{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text-mid);}
+  .day-hdr.today .day-num{color:var(--accent);}
+  .day-hdr.today{background:rgba(79,255,176,0.04);}
+  .corner{background:var(--surface);border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:10px 12px;display:flex;align-items:flex-end;}
+  .corner span{font-size:10px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;}
+  .person-lbl{background:var(--surface);border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:10px;}
+  .p-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--bg);flex-shrink:0;}
+  .p-name{font-size:12px;color:var(--text);font-weight:500;}
+  .cal-cell{border-right:1px solid var(--border);border-bottom:1px solid var(--border);min-height:60px;padding:5px;position:relative;cursor:pointer;transition:background 0.1s;}
+  .cal-cell:hover{background:rgba(255,255,255,0.02);}
+  .cal-cell.weekend{background:rgba(0,0,0,0.15);}
+  .cal-cell.today-col{background:rgba(79,255,176,0.02);}
+  .pill{border-radius:5px;padding:3px 7px;font-size:10px;line-height:1.4;margin-bottom:3px;position:relative;overflow:hidden;transition:all 0.15s;}
+  .pill:hover{filter:brightness(1.15);transform:translateX(1px);}
+  .pill-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+  .pill-sub{opacity:0.7;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;}
+  .pill-del{position:absolute;top:2px;right:2px;background:none;border:none;color:transparent;width:16px;height:16px;cursor:pointer;font-size:10px;border-radius:3px;display:flex;align-items:center;justify-content:center;}
+  .pill:hover .pill-del{color:rgba(255,255,255,0.5);}
+  .pill-del:hover{background:rgba(255,80,80,0.3)!important;color:#ff5050!important;}
+  .cell-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;opacity:0;color:var(--text-dim);transition:opacity 0.15s;}
+  .cal-cell:hover .cell-hint{opacity:0.3;}
+
+  /* SUMMARY */
+  .summary{display:flex;gap:20px;padding:10px 24px;border-top:1px solid var(--border);background:var(--surface);flex-wrap:wrap;}
+  .sum-item{display:flex;align-items:center;gap:8px;}
+  .sum-num{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;}
+  .sum-desc{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;line-height:1.3;}
+  .sum-div{width:1px;background:var(--border);align-self:stretch;margin:2px 0;}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:420px;max-width:95vw;animation:mIn 0.2s ease;}
+  @keyframes mIn{from{opacity:0;transform:translateY(12px) scale(0.97)}to{opacity:1;transform:none}}
+  .modal-title{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;margin-bottom:20px;}
+  .f-row{margin-bottom:14px;}
+  .f-label{font-size:10px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px;}
+  .f-input,.f-select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:border-color 0.15s;}
+  input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1);cursor:pointer;}
+  .f-input:focus,.f-select:focus{border-color:var(--accent);}
+  .f-select option{background:var(--surface);}
+  .f-row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .type-opt{border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;cursor:pointer;transition:all 0.15s;font-size:11px;color:var(--text-mid);}
+  .type-opt:hover{border-color:var(--text-dim);}
+  .type-opt.sel{color:var(--bg);font-weight:600;background:var(--accent);border-color:var(--accent);}
+  .type-icon{font-size:18px;display:block;margin-bottom:3px;}
+  .modal-actions{display:flex;gap:10px;margin-top:22px;justify-content:flex-end;}
+  .btn-cancel{background:none;border:1px solid var(--border);color:var(--text-mid);padding:8px 18px;border-radius:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:13px;transition:all 0.15s;}
+  .btn-cancel:hover{border-color:var(--text-dim);color:var(--text);}
+  .btn-save{background:var(--accent);border:none;color:var(--bg);padding:8px 20px;border-radius:8px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;}
+  .btn-save:disabled{opacity:0.5;cursor:not-allowed;}
+
+  /* TOOLTIP */
+  .tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;z-index:300;pointer-events:none;display:none;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+  .tooltip.visible{display:block;}
+  .tt-title{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:4px;}
+  .tt-row{color:var(--text-mid);font-size:11px;margin-bottom:2px;}
+  .tt-row span{color:var(--text);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="screen">
+  <div class="logo">field<span>track</span></div>
+  <div class="sub">Team location &amp; visit calendar.<br>Sign in with your Microsoft 365 account.</div>
+  <button class="ms-btn" onclick="signIn()">
+    <svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+    </svg>
+    Sign in with Microsoft
+  </button>
+  <div id="loginErr" class="err hidden"></div>
+</div>
+
+<!-- LOADING -->
+<div id="loadingScreen" class="screen hidden">
+  <div class="spinner"></div>
+  <div class="loading-txt" id="loadingTxt">Loading...</div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" class="hidden">
+  <div class="header">
+    <div class="header-left">
+      <div class="h-logo">field<span>track</span></div>
+      <div class="week-nav">
+        <button class="nav-btn" onclick="shiftWeek(-1)">‹</button>
+        <div class="week-label" id="weekLabel">—</div>
+        <button class="nav-btn" onclick="shiftWeek(1)">›</button>
+        <button class="today-btn" onclick="goToToday()">Today</button>
+      </div>
+      <span class="sync-dot" id="syncDot"></span><span class="sync-txt" id="syncTxt">synced</span>
+    </div>
+    <div class="header-right">
+      <div class="user-chip">
+        <div class="avatar" id="userAvatar">?</div>
+        <div class="user-name" id="userName">—</div>
+        <button class="signout-btn" onclick="signOut()">sign out</button>
+      </div>
+      <button class="add-btn" onclick="openModal()">+ Add Entry</button>
+    </div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="cal-wrap"><div class="cal-grid" id="calGrid"></div></div>
+  <div class="summary" id="summary"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title">Add Entry</div>
+    <div class="f-row"><label class="f-label">Person</label><select class="f-select" id="fPerson"></select></div>
+    <div class="f-row"><label class="f-label">Activity Type</label><div class="type-grid" id="typeGrid"></div></div>
+    <div class="f-row"><label class="f-label">Location / Site</label><select class="f-select" id="fSite"></select></div>
+    <div class="f-row"><label class="f-label">Notes (optional)</label><input class="f-input" id="fNotes" placeholder="e.g. Customer meeting, Flight BA204..."></div>
+    <div class="f-row f-row-2">
+      <div><label class="f-label">From</label><input class="f-input" type="date" id="fFrom"></div>
+      <div><label class="f-label">To</label><input class="f-input" type="date" id="fTo"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" id="btnSave" onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+<!-- ENTRY MENU -->
+<div class="modal-overlay" id="entryMenuOverlay" onclick="if(event.target===this)closeEntryMenu()">
+  <div class="modal" style="max-width:320px;">
+    <div class="modal-title" id="entryMenuTitle">Entry</div>
+    <div id="entryMenuDetails" style="font-size:12px;color:var(--text-mid);margin-bottom:20px;line-height:1.8;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn-save" style="width:100%" onclick="editEntryFromMenu()">✏️ Edit Entry</button>
+      <button class="btn-cancel" style="width:100%;border-color:var(--accent2);color:var(--accent2)" onclick="deleteEntryFromMenu()">🗑 Delete Entry</button>
+      <button class="btn-cancel" style="width:100%" onclick="closeEntryMenu()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG — hardcoded, no setup needed
+// ══════════════════════════════════════════════
+const CLIENT_ID = '99a9aa0f-af36-417c-8a4c-22ab6d8a0f5c';
+const TENANT_ID = 'd21da1ea-9475-4a04-af78-be027e95ad21';
+const REDIRECT  = window.location.origin + window.location.pathname;
+const SCOPES    = ['Files.ReadWrite', 'Sites.ReadWrite.All', 'User.Read'];
+const DRIVE_ID  = 'b!3y1MuVM7PUGNdgtbNgRqUtB6idi-IHhOteASVJhgC441Cizjt2hLRKHWzIAuPmrD';
+const FILE_ID   = '01G5MG7JPDQETFJSAGPJHZH33WSTC65CQF';
+const TABLE     = 'EntriesTable';
+
+// ── Team ───────────────────────────────────────
+const PEOPLE = [
+  { id:1, name:"Hugo",   color:"#4fffb0" },
+  { id:2, name:"Sascha", color:"#4ac8ff" },
+  { id:3, name:"Marco",  color:"#ffd166" },
+  { id:4, name:"David",  color:"#ff6b4a" },
+  { id:5, name:"JP",     color:"#c084fc" },
+];
+
+// ── Sites ──────────────────────────────────────
+const SITES = [
+  { id:"deqing",    label:"Deqing HQ",     color:"#4fffb0" },
+  { id:"chengdu",   label:"Chengdu",       color:"#4ac8ff" },
+  { id:"dusseldorf",label:"Düsseldorf",    color:"#ffd166" },
+  { id:"singapore", label:"Singapore",     color:"#ff6b4a" },
+  { id:"johor",     label:"Johor Bahru",   color:"#c084fc" },
+  { id:"shanghai",  label:"Shanghai",      color:"#f472b6" },
+  { id:"travel",    label:"Travel",        color:"#fb923c" },
+  { id:"remote",    label:"Remote / Home", color:"#6b7594" },
+  { id:"ooo",       label:"Out of Office", color:"#94a3b8" },
+  { id:"vacation",  label:"Vacation",      color:"#34d399" },
+  { id:"customer",  label:"Customer Site", color:"#a78bfa" },
+];
+
+const TYPES = [
+  { id:"visit",    label:"Customer Visit", icon:"🤝" },
+  { id:"travel",   label:"Travel",         icon:"✈️"  },
+  { id:"office",   label:"Office Day",     icon:"🏢" },
+  { id:"remote",   label:"Remote",         icon:"🏠" },
+  { id:"training", label:"Training",       icon:"📚" },
+  { id:"other",    label:"Other",          icon:"📌" },
+];
+
+// ══════════════════════════════════════════════
+// MSAL
+// ══════════════════════════════════════════════
+const msalApp = new msal.PublicClientApplication({
+  auth: { clientId:CLIENT_ID, authority:`https://login.microsoftonline.com/${TENANT_ID}`, redirectUri:REDIRECT },
+  cache: { cacheLocation:'localStorage' }
+});
+let account = null;
+
+async function getToken() {
+  try { return (await msalApp.acquireTokenSilent({ scopes:SCOPES, account })).accessToken; }
+  catch(e) {
+    // Fallback to popup, if blocked fall back to redirect
+    try { return (await msalApp.acquireTokenPopup({ scopes:SCOPES })).accessToken; }
+    catch { await msalApp.acquireTokenRedirect({ scopes:SCOPES }); }
+  }
+}
+async function signIn() {
+  showErr('loginErr','');
+  show('loading'); setTxt('Signing in...');
+  if (window.inTeams) {
+    await signInTeams();
+  } else {
+    await msalApp.initialize();
+    await msalApp.loginRedirect({ scopes:SCOPES });
+  }
+}
+
+async function signInTeams() {
+  try {
+    await microsoftTeams.app.initialize();
+    const authToken = await new Promise((resolve, reject) => {
+      microsoftTeams.authentication.getAuthToken({
+        successCallback: resolve,
+        failureCallback: reject
+      });
+    });
+    // Exchange Teams token for Graph token via OBO flow is complex
+    // Instead use Teams popup auth
+    microsoftTeams.authentication.authenticate({
+      url: window.location.origin + window.location.pathname + '?teamsauth=1',
+      width: 600,
+      height: 535,
+      successCallback: async (result) => {
+        const accounts = msalApp.getAllAccounts();
+        if (accounts.length > 0) {
+          account = accounts[0];
+          setUser(account.name);
+          await boot();
+        }
+      },
+      failureCallback: (reason) => {
+        show('login');
+        showErr('loginErr', 'Teams auth failed: ' + reason);
+      }
+    });
+  } catch(e) {
+    // Fall back to redirect
+    await msalApp.initialize();
+    await msalApp.loginRedirect({ scopes:SCOPES });
+  }
+}
+
+function signOut() { msalApp.logoutRedirect(); }
+function setUser(name) {
+  document.getElementById('userAvatar').textContent = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('userName').textContent = name.split(' ')[0];
+}
+
+// ══════════════════════════════════════════════
+// GRAPH API
+// ══════════════════════════════════════════════
+async function graph(method, url, body) {
+  const token = await getToken();
+  const r = await fetch('https://graph.microsoft.com/v1.0'+url, {
+    method,
+    headers:{ Authorization:'Bearer '+token, 'Content-Type':'application/json' },
+    ...(body!==undefined?{body:JSON.stringify(body)}:{})
+  });
+  if (r.status===204) return null;
+  const d = await r.json();
+  if (!r.ok) throw new Error(JSON.stringify(d));
+  return d;
+}
+const gGet  = u    => graph('GET',   u);
+const gPost = (u,b)=> graph('POST',  u,b);
+const gDel  = u    => graph('DELETE',u);
+
+// ══════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════
+async function loadEntries() {
+  sync('syncing','syncing...');
+  const data = await gGet(`/drives/${DRIVE_ID}/items/${FILE_ID}/workbook/tables/${TABLE}/rows`);
+  entries = (data.value||[]).map(row=>{
+    const [id,personId,type,site,notes,from,to]=row.values[0];
+    return {id:+id,personId:+personId,type,site,notes:notes||'',from:toISO(from),to:toISO(to)};
+  }).filter(e=>e.from&&e.to);
+  nextId = entries.length ? Math.max(...entries.map(e=>e.id))+1 : 1;
+  sync('synced','synced');
+}
+
+async function pushEntry(entry) {
+  sync('syncing','saving...');
+  await gPost(`/drives/${DRIVE_ID}/items/${FILE_ID}/workbook/tables/${TABLE}/rows/add`,
+    {values:[[entry.id,entry.personId,entry.type,entry.site,entry.notes,entry.from,entry.to]]});
+  sync('synced','synced');
+}
+
+async function removeEntry(id) {
+  sync('syncing','deleting...');
+  const data = await gGet(`/drives/${DRIVE_ID}/items/${FILE_ID}/workbook/tables/${TABLE}/rows`);
+  const idx = (data.value||[]).findIndex(r=>+r.values[0][0]===id);
+  if (idx>=0) await gDel(`/drives/${DRIVE_ID}/items/${FILE_ID}/workbook/tables/${TABLE}/rows/itemAt(index=${idx})`);
+  sync('synced','synced');
+}
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+async function boot() {
+  setTxt('Loading calendar...');
+  try {
+    await loadEntries();
+    show('main'); render();
+  } catch(e) {
+    show('login');
+    showErr('loginErr','Failed to load: '+(e.message||e));
+  }
+}
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let entries=[], nextId=1;
+let currentMonday=getMonday(new Date());
+let filteredSites=new Set(), selType='visit';
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function show(name) {
+  document.getElementById('loginScreen').classList.toggle('hidden', name!=='login');
+  document.getElementById('loadingScreen').classList.toggle('hidden', name!=='loading');
+  document.getElementById('mainApp').classList.toggle('hidden', name!=='main');
+}
+function setTxt(t) { document.getElementById('loadingTxt').textContent=t; }
+function showErr(id,msg) { const el=document.getElementById(id); el.textContent=msg; el.classList.toggle('hidden',!msg); }
+function sync(state,txt) {
+  const d=document.getElementById('syncDot');
+  d.className='sync-dot'+(state==='syncing'?' syncing':state==='error'?' error':'');
+  document.getElementById('syncTxt').textContent=txt;
+}
+function toISO(s) {
+  if (!s) return '';
+  if (typeof s === 'number') {
+    const d = new Date((s - 25569) * 86400 * 1000);
+    return d.toISOString().slice(0,10);
+  }
+  s = String(s);
+  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) return s;
+  if (s.includes('/')) {
+    const parts = s.split('/').map(Number);
+    return `${parts[2]}-${String(parts[0]).padStart(2,'0')}-${String(parts[1]).padStart(2,'0')}`;
+  }
+  return s;
+}
+function getMonday(d) { const dt=new Date(d),day=dt.getDay(); dt.setDate(dt.getDate()+(day===0?-6:1-day)); dt.setHours(0,0,0,0); return dt; }
+function addDays(d,n) { const dt=new Date(d); dt.setDate(dt.getDate()+n); return dt; }
+function fmt(d) { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function parseD(s) {
+  if (!s) return new Date(0);
+  if (typeof s === 'number') {
+    // Excel serial number — use UTC then extract local date parts
+    const d = new Date((s - 25569) * 86400 * 1000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  s = String(s);
+  if (s.includes('-') && s.length === 10) {
+    // ISO: parse as LOCAL date to avoid UTC timezone shift
+    const [y,m,d] = s.split('-').map(Number);
+    return new Date(y, m-1, d);
+  }
+  if (s.includes('/')) {
+    const parts = s.split('/').map(Number);
+    return new Date(parts[2], parts[0]-1, parts[1]);
+  }
+  return new Date(s);
+}
+
+// Also fix fmt() to always use local date, not UTC
+
+function overlaps(e,ds) { const d=parseD(ds),f=parseD(e.from),t=parseD(e.to); return d>=f&&d<=t; }
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+function render() { renderLegend(); renderGrid(); renderSummary(); }
+
+function renderLegend() {
+  document.getElementById('legend').innerHTML=SITES.map(s=>`
+    <div class="legend-item ${filteredSites.has(s.id)?'filtered':''}" onclick="toggleFilter('${s.id}')">
+      <div class="legend-dot" style="background:${s.color}"></div>${s.label}</div>`).join('');
+}
+
+function renderGrid() {
+  const today=fmt(new Date()), days=Array.from({length:7},(_,i)=>addDays(currentMonday,i));
+  document.getElementById('weekLabel').textContent=
+    days[0].toLocaleDateString('en-GB',{month:'short',day:'numeric'})+' – '+
+    days[6].toLocaleDateString('en-GB',{month:'short',day:'numeric',year:'numeric'});
+  let h=`<div class="corner"><span>Team</span></div>`;
+  days.forEach(d=>{
+    const ds=fmt(d),T=ds===today,W=d.getDay()===0||d.getDay()===6;
+    h+=`<div class="day-hdr ${T?'today':''} ${W?'weekend':''}">
+      <div class="day-name">${d.toLocaleDateString('en-GB',{weekday:'short'})}</div>
+      <div class="day-num">${d.getDate()}</div></div>`;
+  });
+  PEOPLE.forEach((p,pi)=>{
+    const last=pi===PEOPLE.length-1;
+    h+=`<div class="person-lbl" style="${last?'border-bottom:none':''}">
+      <div class="p-avatar" style="background:${p.color}">${p.name.slice(0,2).toUpperCase()}</div>
+      <div class="p-name">${p.name}</div></div>`;
+    days.forEach((d,di)=>{
+      const ds=fmt(d),T=ds===today,W=d.getDay()===0||d.getDay()===6,L=di===6;
+      const de=entries.filter(e=>e.personId===p.id&&overlaps(e,ds)&&!filteredSites.has(e.site));
+      const pills=de.map(e=>{
+        const s=SITES.find(s=>s.id===e.site),t=TYPES.find(t=>t.id===e.type),bg=s?s.color:'#444';
+        return `<div class="pill" style="background:${bg}22;border-left:3px solid ${bg};color:${bg}"
+          onmouseenter="showTT(event,${e.id})" onmouseleave="hideTT()" onclick="event.stopPropagation();openEntryMenu(event,${e.id})">
+          <span class="pill-title">${t?t.icon:''} ${s?s.label:e.site}</span>
+          ${e.notes?`<span class="pill-sub">${e.notes}</span>`:''}</div>`;
+      }).join('');
+      h+=`<div class="cal-cell ${T?'today-col':''} ${W?'weekend':''}"
+        onclick="openModal(${p.id},'${ds}')"
+        style="${L?'border-right:none':''} ${last?'border-bottom:none':''}">
+        ${pills}${de.length===0?'<div class="cell-hint">+</div>':''}</div>`;
+    });
+  });
+  document.getElementById('calGrid').innerHTML=h;
+}
+
+function renderSummary() {
+  const days=Array.from({length:7},(_,i)=>fmt(addDays(currentMonday,i)));
+  const we=entries.filter(e=>days.some(d=>overlaps(e,d)));
+  document.getElementById('summary').innerHTML=`
+    <div class="sum-item"><div class="sum-num" style="color:var(--accent)">${we.filter(e=>e.type==='visit').length}</div><div class="sum-desc">Customer<br>visits</div></div>
+    <div class="sum-div"></div>
+    <div class="sum-item"><div class="sum-num" style="color:var(--accent3)">${we.filter(e=>e.type==='travel').length}</div><div class="sum-desc">Travel<br>days</div></div>
+    <div class="sum-div"></div>
+    <div class="sum-item"><div class="sum-num" style="color:var(--accent4)">${new Set(we.map(e=>e.site)).size}</div><div class="sum-desc">Active<br>sites</div></div>
+    <div class="sum-div"></div>
+    <div class="sum-item"><div class="sum-num">${new Set(we.map(e=>e.personId)).size}</div><div class="sum-desc">Team<br>members</div></div>`;
+}
+
+// ══════════════════════════════════════════════
+// INTERACTIONS
+// ══════════════════════════════════════════════
+function shiftWeek(n) { currentMonday=addDays(currentMonday,n*7); render(); }
+function goToToday() { currentMonday=getMonday(new Date()); render(); }
+function toggleFilter(s) { filteredSites.has(s)?filteredSites.delete(s):filteredSites.add(s); render(); }
+
+function openModal(personId,date) {
+  document.getElementById('fPerson').innerHTML=PEOPLE.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  if (personId) document.getElementById('fPerson').value=personId;
+  document.getElementById('typeGrid').innerHTML=TYPES.map(t=>`
+    <div class="type-opt ${t.id===selType?'sel':''}" onclick="selTypeClick('${t.id}')" id="tt_${t.id}">
+      <span class="type-icon">${t.icon}</span>${t.label}</div>`).join('');
+  document.getElementById('fSite').innerHTML=SITES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+  const fd=date||fmt(currentMonday);
+  document.getElementById('fFrom').value=fd;
+  document.getElementById('fTo').value=fd;
+  document.getElementById('fNotes').value='';
+  document.getElementById('btnSave').disabled=false;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function selTypeClick(id) {
+  selType=id;
+  TYPES.forEach(t=>{ const el=document.getElementById('tt_'+t.id); if(el) el.classList.toggle('sel',t.id===id); });
+}
+
+async function saveEntry() {
+  const personId=+document.getElementById('fPerson').value;
+  const site=document.getElementById('fSite').value;
+  const notes=document.getElementById('fNotes').value.trim();
+  const from=document.getElementById('fFrom').value;
+  const to=document.getElementById('fTo').value;
+  if (!from||!to) { alert('Please set dates.'); return; }
+  if (from>to) { alert('End date must be after start.'); return; }
+  const entry={id:nextId++,personId,type:selType,site,notes,from,to};
+  entries.push(entry); closeModal(); render();
+  document.getElementById('btnSave').disabled=true;
+  try { await pushEntry(entry); } catch(e) { alert('Saved locally but sync failed.'); }
+  document.getElementById('btnSave').disabled=false;
+}
+
+async function delEntry(id,e) {
+  e.stopPropagation();
+  entries=entries.filter(x=>x.id!==id); hideTT(); render();
+  try { await removeEntry(id); } catch(e) { console.error(e); }
+}
+
+function showTT(event,id) {
+  const e=entries.find(e=>e.id===id); if(!e) return;
+  const p=PEOPLE.find(p=>p.id===e.personId),s=SITES.find(s=>s.id===e.site),t=TYPES.find(t=>t.id===e.type);
+  const tt=document.getElementById('tooltip');
+  tt.innerHTML=`<div class="tt-title" style="color:${s?s.color:'#fff'}">${t?t.icon+' '+t.label:''}</div>
+    <div class="tt-row">Person: <span>${p?p.name:'?'}</span></div>
+    <div class="tt-row">Site: <span>${s?s.label:e.site}</span></div>
+    <div class="tt-row">Dates: <span>${e.from} → ${e.to}</span></div>
+    ${e.notes?`<div class="tt-row">Notes: <span>${e.notes}</span></div>`:''}`;
+  tt.style.left=(event.clientX+14)+'px'; tt.style.top=(event.clientY-10)+'px';
+  tt.classList.add('visible');
+}
+function hideTT() { document.getElementById('tooltip').classList.remove('visible'); }
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+// ENTRY MENU
+// ══════════════════════════════════════════════
+let menuEntryId = null;
+
+function openEntryMenu(event, id) {
+  event.stopPropagation();
+  hideTT();
+  menuEntryId = id;
+  const e = entries.find(e=>e.id===id); if (!e) return;
+  const p = PEOPLE.find(p=>p.id===e.personId);
+  const s = SITES.find(s=>s.id===e.site);
+  const t = TYPES.find(t=>t.id===e.type);
+  document.getElementById('entryMenuTitle').textContent = (t?t.icon+' '+t.label:'Entry');
+  document.getElementById('entryMenuDetails').innerHTML = `
+    <div><strong>Person:</strong> ${p?p.name:'?'}</div>
+    <div><strong>Location:</strong> ${s?s.label:e.site}</div>
+    <div><strong>Dates:</strong> ${e.from} → ${e.to}</div>
+    ${e.notes?`<div><strong>Notes:</strong> ${e.notes}</div>`:''}`;
+  document.getElementById('entryMenuOverlay').classList.add('open');
+}
+
+function closeEntryMenu() {
+  document.getElementById('entryMenuOverlay').classList.remove('open');
+  menuEntryId = null;
+}
+
+function editEntryFromMenu() {
+  const e = entries.find(e=>e.id===menuEntryId); if (!e) return;
+  closeEntryMenu();
+  // Open modal pre-filled
+  document.getElementById('fPerson').innerHTML=PEOPLE.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('fPerson').value = e.personId;
+  selType = e.type;
+  document.getElementById('typeGrid').innerHTML=TYPES.map(t=>`
+    <div class="type-opt ${t.id===e.type?'sel':''}" onclick="selTypeClick('${t.id}')" id="tt_${t.id}">
+      <span class="type-icon">${t.icon}</span>${t.label}</div>`).join('');
+  document.getElementById('fSite').innerHTML=SITES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+  document.getElementById('fSite').value = e.site;
+  document.getElementById('fFrom').value = e.from;
+  document.getElementById('fTo').value = e.to;
+  document.getElementById('fNotes').value = e.notes;
+  document.getElementById('btnSave').disabled = false;
+  // Override save to update instead of add
+  document.getElementById('btnSave').onclick = () => updateEntry(e.id);
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+async function updateEntry(id) {
+  const personId = +document.getElementById('fPerson').value;
+  const site     = document.getElementById('fSite').value;
+  const notes    = document.getElementById('fNotes').value.trim();
+  const from     = document.getElementById('fFrom').value;
+  const to       = document.getElementById('fTo').value;
+  if (!from||!to) { alert('Please set dates.'); return; }
+  if (from>to) { alert('End date must be after start.'); return; }
+  // Delete old, add new
+  entries = entries.filter(e=>e.id!==id);
+  const entry = {id, personId, type:selType, site, notes, from, to};
+  entries.push(entry);
+  closeModal();
+  // Reset save button
+  document.getElementById('btnSave').onclick = saveEntry;
+  render();
+  try {
+    await removeEntry(id);
+    await pushEntry(entry);
+  } catch(e) { alert('Updated locally but sync failed.'); }
+}
+
+async function deleteEntryFromMenu() {
+  const id = menuEntryId;
+  closeEntryMenu();
+  entries = entries.filter(e=>e.id!==id); render();
+  try { await removeEntry(id); } catch(e) { console.error(e); }
+}
+
+(async()=>{
+  // Detect if running inside Teams
+  window.inTeams = false;
+  try {
+    await microsoftTeams.app.initialize();
+    const ctx = await microsoftTeams.app.getContext();
+    if (ctx) window.inTeams = true;
+  } catch {}
+
+  await msalApp.initialize();
+
+  // Handle redirect coming back
+  try {
+    const r = await msalApp.handleRedirectPromise();
+    if (r) {
+      account = r.account;
+      // If this was a Teams auth popup, notify Teams
+      if (window.location.search.includes('teamsauth=1')) {
+        microsoftTeams.authentication.notifySuccess();
+        return;
+      }
+    }
+  } catch(e) {
+    if (window.location.search.includes('teamsauth=1')) {
+      microsoftTeams.authentication.notifyFailure(e.message);
+      return;
+    }
+  }
+
+  if (!account) {
+    const accounts = msalApp.getAllAccounts();
+    if (accounts.length > 0) account = accounts[0];
+  }
+
+  if (account) {
+    setUser(account.name);
+    show('loading'); await boot();
+  } else {
+    show('login');
+  }
+})();
+</script>
+</body>
+</html>
